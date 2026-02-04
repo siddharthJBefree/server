@@ -1,0 +1,281 @@
+DOCKER HOMELAB – PRODUCTION-GRADE STANDARDS
+===========================================
+
+Purpose
+-------
+This document defines production-grade standards for running Docker workloads
+on a single Linux machine (homelab or personal server). These standards focus on:
+- Strong security
+- Least-privilege permissions
+- Proper secrets handling
+- Network isolation
+- Backup and recovery discipline
+- Operational hygiene
+
+These standards are intended to be understandable and enforceable by both
+humans and automated systems (AI, scripts, audits).
+
+--------------------------------------------------
+1. HOST OPERATING SYSTEM STANDARDS
+--------------------------------------------------
+
+1.1 Linux OS
+- Use a stable Linux distribution (Ubuntu LTS, Debian Stable, etc.)
+- Apply automatic security updates
+- Use SSH key-based authentication only for docker
+
+1.2 User Management
+- Do NOT run Docker commands as root
+- Create a dedicated non-root user (username must be doc_user)
+- Add that user to the docker group (group must be doc_group)
+- Disable direct root login
+
+1.3 Host Security
+- Enable firewall (UFW or nftables)
+- Allow only required inbound ports (typically 80/443/22)
+- Enable Fail2ban
+- Monitor system logs
+
+--------------------------------------------------
+2. DOCKER ENGINE HARDENING
+--------------------------------------------------
+
+2.1 Docker Daemon Configuration
+- Enable user namespace remapping
+- Disable inter-container communication by default
+- Enable live restore
+- Enable no-new-privileges
+- Limit container log size and rotation
+
+2.2 Prohibited Docker Practices
+- Do NOT use privileged containers
+- Do NOT mount /var/run/docker.sock
+- Do NOT mount host root (/)
+- Do NOT use Docker as root
+
+--------------------------------------------------
+3. NETWORK SEGMENTATION
+--------------------------------------------------
+
+3.1 Network Types
+- frontend_net: Public-facing network (reverse proxy only)
+- backend_net: Internal services (applications, databases)
+- monitoring_net: Monitoring and observability stack
+
+3.2 Network Rules
+- Only reverse proxy containers may connect to the internet
+- Backend and monitoring networks must be internal-only
+- Containers may only join networks they explicitly require
+
+--------------------------------------------------
+4. REVERSE PROXY & INGRESS
+--------------------------------------------------
+
+4.1 Entry Point Rules
+- Single reverse proxy for all inbound traffic
+- TLS required (Let’s Encrypt or equivalent)
+- HTTP must redirect to HTTPS
+- Rate limiting enabled
+
+4.2 Port Exposure Rules
+- Only reverse proxy may publish host ports
+- All other services must use expose, not ports
+
+--------------------------------------------------
+5. CONTAINER SECURITY & LEAST PRIVILEGE
+--------------------------------------------------
+
+5.1 User Permissions
+- Containers must not run as root
+- Explicit UID:GID must be defined where possible
+
+5.2 Capability Management
+- Drop all Linux capabilities by default
+- Add only required capabilities explicitly
+- Enable no-new-privileges security option
+
+5.3 Filesystem Restrictions
+- Use read-only root filesystem where possible
+- Mount only required directories
+- Avoid writable mounts unless necessary
+
+--------------------------------------------------
+6. SECRETS MANAGEMENT
+--------------------------------------------------
+
+6.1 Secrets Storage
+- Secrets must be stored as files, not environment variables
+- Secrets directory must be outside application directories
+- Secrets must have strict permissions (600, root-owned)
+
+6.2 Secrets Usage
+- Use Docker secrets mechanism (file-based)
+- Applications must read secrets from files
+- Secrets must not appear in logs, images, or git
+
+6.3 Prohibited Practices
+- Do NOT store secrets in .env files
+- Do NOT commit secrets to source control
+- Do NOT expose secrets via docker inspect
+
+--------------------------------------------------
+7. DATA & VOLUME MANAGEMENT
+--------------------------------------------------
+
+7.1 Volume Layout
+- Centralized data directory (e.g., /home/{user}/Server)
+- Separate directory per service
+- Separate data, config, and logs where possible
+
+7.2 Mount Rules
+- Mount only the required subdirectories
+- Avoid broad host mounts
+- Avoid sharing volumes between unrelated services
+
+--------------------------------------------------
+8. BACKUP & RECOVERY STANDARDS
+--------------------------------------------------
+
+8.1 Backup Scope
+- Application data volumes
+- Database dumps
+- Configuration files
+- Docker compose definitions
+- Secrets (encrypted)
+
+8.2 Backup Frequency
+- Databases: daily
+- Application data: daily
+- Secrets: weekly
+- Config files: on change
+
+8.3 Backup Properties
+- Encrypted
+- Incremental
+- Offsite or offline copy required
+
+8.4 Restore Testing
+- Restore procedures must be documented
+- Restore tests must be performed periodically
+- Backups without restore tests are considered invalid
+
+--------------------------------------------------
+9. IMAGE & UPDATE MANAGEMENT
+--------------------------------------------------
+
+9.1 Image Versioning
+- Images must be pinned to explicit versions
+- Do NOT use the "latest" tag
+
+9.2 Updates
+- Updates must be deliberate and controlled
+- Automatic updates must be notify-only
+- Maintain a regular maintenance window
+
+--------------------------------------------------
+10. MONITORING & OBSERVABILITY
+--------------------------------------------------
+
+10.1 Monitoring Stack
+- Container metrics collection
+- Host resource monitoring
+- Centralized logging
+
+10.2 Security Scanning
+- Regular image vulnerability scanning
+- Review container permissions periodically
+
+--------------------------------------------------
+11. OPERATIONAL DISCIPLINE
+--------------------------------------------------
+
+11.1 Documentation
+- All services must have documented purpose
+- Network and volume usage must be clear
+- Secrets ownership must be known
+
+11.2 Change Management
+- Changes should be reversible
+- Configuration should be version-controlled
+- Emergency changes must be documented afterward
+
+--------------------------------------------------
+12. ANTI-PATTERNS (STRICTLY DISALLOWED)
+--------------------------------------------------
+
+- Running containers as root
+- Using privileged containers
+- Exposing databases to the host network
+- Secrets in environment variables
+- Mounting docker.sock
+- No backups or untested backups
+- Flat network for all containers
+
+--------------------------------------------------
+13. FOLDER STRUCTURE FOR HOMELAB
+--------------------------------------------------
+/home/{user}/Server         # Define this folder structures
+├── .env                    # Global, NON-SECRET variables
+├── compose.yaml            # Optional global compose (networks only)
+│
+├── apps/
+│   ├── pihole/
+│   │   ├── compose.yaml
+│   │   ├── .env            # App-specific vars (no secrets)
+│   │   ├── config/
+│   │   └── data/
+│   │
+│   ├── nextcloud/
+│   │   ├── compose.yaml
+│   │   ├── .env
+│   │   ├── config/
+│   │   └── data/
+│   │
+│   ├── immich/
+│   │   ├── compose.yaml
+│   │   ├── .env
+│   │   ├── config/
+│   │   └── library/
+│   │
+│   ├── nginx-proxy-manager/
+│   │   ├── compose.yaml
+│   │   ├── .env
+│   │   └── data/
+|   |
+|   ├── {{OTHER_APP}}/
+│   │   ├── compose.yaml
+│   │   ├── .env
+│   │   └── data/
+│
+├── secrets/
+│   ├── pihole/
+│   │   └── admin_password.txt
+│   ├── nextcloud/
+│   │   └── db_password.txt
+│   ├── immich/
+│   |   └── jwt_secret.txt
+│   └── {{OTHER_APP}}/
+│       └── {{OTHER_APP}}.txt
+│
+├── networks/
+│   └── docker-networks.yaml
+│
+├── backups/
+│   ├── snapshots/
+│   ├── databases/
+│   └── restore/
+│
+├── scripts/
+│   ├── backup.sh
+│   ├── restore.sh
+│   ├── update-all.sh
+│   └── health-check.sh
+│
+└── logs/
+    └── docker/
+
+
+--------------------------------------------------
+END OF DOCUMENT
+--------------------------------------------------
+

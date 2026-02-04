@@ -1,0 +1,57 @@
+# .gitignore for Docker Homelab
+# Ignore Python bytecode and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore logs
+logs/
+*.log
+
+# Ignore secrets and sensitive files
+secrets/
+*.env
+*.pem
+*.key
+*.crt
+
+# Ignore backup and restore files
+backups/
+*.bak
+restore/
+
+# Ignore Docker data and config
+apps/*/data/
+apps/*/config/
+apps/*/library/
+apps/*/machine-learning/
+apps/*/port/data/
+apps/*/proxy/data/
+apps/proxy/letsencrypt/
+networks/
+certificates/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore node_modules if any
+node_modules/
+
+# Ignore VS Code settings
+.vscode/
+
+# Ignore Compose override files
+*.override.yaml
+*.override.yml
+
+# Ignore immich thumbs and encoded video
+apps/immich/library/thumbs/
+apps/immich/library/encoded-video/
+
+# Ignore user files
+apps/actual/data/user-files/
+
+# Ignore server files
+apps/actual/data/server-files/

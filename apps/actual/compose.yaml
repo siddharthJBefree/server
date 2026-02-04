@@ -1,0 +1,15 @@
+services:
+  actual_server:
+    container_name: actual_budget
+    image: actualbudget/actual-server:latest
+    volumes:
+      - ./data:/data
+    env_file:
+      - ../../.env
+    restart: unless-stopped
+    networks:
+      - frontend_net
+
+networks:
+  frontend_net:
+    external: true

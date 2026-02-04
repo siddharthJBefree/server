@@ -1,0 +1,34 @@
+services:
+  app:
+    container_name: port
+    image: portainer/portainer-ce:2.33.6
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+    # --- SECURITY EXCEPTION ---
+    # Required because we enabled User Namespace Remapping on the Host.
+    # This allows Portainer to see the real "root" socket.
+    userns_mode: "host"
+
+    # STANDARD 4.2 EXCEPTION (Temporary)
+    # Direct port access is allowed ONLY until Reverse Proxy is running.
+    # After that, remove this section.
+    # ports:
+    #  - "9443:9443"
+
+    volumes:
+      # STANDARD 12 EXCEPTION: Required for management
+      - /var/run/docker.sock:/var/run/docker.sock
+      # STANDARD 7.1: Centralized Data
+      - ./data:/data
+
+    networks:
+      - frontend_net    # To be accessible via Web
+      - monitoring_net  # To monitor other containers
+
+networks:
+  frontend_net:
+    external: true
+  monitoring_net:
+    external: true

@@ -1,0 +1,36 @@
+services:
+  postiz:
+    image: ghcr.io/gitroomhq/postiz-app:latest
+    container_name: postiz
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    volumes:
+      - ./volumes/uploads:/app/uploads
+    networks:
+      - postiz_net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postiz-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postiz
+      POSTGRES_USER: postiz
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - ./volumes/postgres:/var/lib/postgresql/data
+    networks:
+      - postiz_net
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+
+networks:
+  postiz_net:
+    external: false

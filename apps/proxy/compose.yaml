@@ -1,0 +1,31 @@
+services:
+  app:
+    container_name: proxy
+    image: 'jc21/nginx-proxy-manager:2.13.6' # Pinned stable version
+    restart: unless-stopped
+
+    # --- SECURITY EXCEPTION ---
+    # NPM needs 'root' inside to bind ports and manage Nginx.
+    # Because we use User Namespace Remapping, we must explicitly
+    # allow it to run in "host" namespace mode to function correctly 
+    # and write to its volumes without complex permission mapping.
+    userns_mode: "host"
+
+    ports:
+      - '80:80'     # HTTP Traffic
+    #  - '81:81'     # Admin Dashboard (Block this in firewall later!)
+      - '443:443'   # HTTPS Traffic
+
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+
+    networks:
+      - frontend_net
+      - backend_net
+
+networks:
+  frontend_net:
+    external: true
+  backend_net:
+    external: true
