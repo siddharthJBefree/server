@@ -1,7 +1,7 @@
 services:
   actual_server:
     container_name: actual_budget
-    image: actualbudget/actual-server:latest
+    image: ghcr.io/actualbudget/actual:latest
     volumes:
       - ./data:/data
     env_file:
@@ -9,6 +9,8 @@ services:
     restart: unless-stopped
     networks:
       - frontend_net
+    # ports:
+    #  - "5006:5006"
 
 networks:
   frontend_net:
