@@ -29,7 +29,6 @@ apps/*/machine-learning/
 apps/*/port/data/
 apps/*/proxy/data/
 apps/proxy/letsencrypt/
-networks/
 certificates/
 
 # Ignore system files

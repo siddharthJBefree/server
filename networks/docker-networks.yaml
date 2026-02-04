@@ -1,0 +1,29 @@
+# docker-networks.yaml
+# Production-grade Docker Compose networks for homelab environment
+
+networks:
+  frontend_net:
+    driver: bridge
+    name: frontend_net
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+    # Public-facing network (reverse proxy only)
+
+  backend_net:
+    driver: bridge
+    name: backend_net
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+    # Internal services (apps, databases)
+    
+  monitoring_net:
+    driver: bridge
+    name: monitoring_net
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.32.0.0/24
+    # Monitoring and observability stack
