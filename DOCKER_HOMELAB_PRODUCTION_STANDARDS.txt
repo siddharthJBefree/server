@@ -16,6 +16,75 @@ These standards are intended to be understandable and enforceable by both
 humans and automated systems (AI, scripts, audits).
 
 --------------------------------------------------
+0. GLOBAL ENVIRONMENT STANDARDIZATION
+--------------------------------------------------
+
+Purpose
+-------
+All Docker services must rely on centralized global environment variables
+to ensure portability, consistency, and easier migration across hosts.
+
+Hardcoding host paths, user IDs, or system values inside compose files is prohibited.
+
+A single global .env file must define all shared infrastructure variables.
+
+
+0.1 Global .env Location
+- Must exist at:
+  /home/{user}/Server/.env
+- Must NOT contain secrets
+- Must be loaded by all compose files
+
+
+0.2 Required Global Variables
+The following variables are mandatory:
+
+SERVER_ROOT   → Root directory for all Docker data
+DOMAIN_NAME   → Base internal domain
+PUID          → Non-root user id for containers
+PGID          → Non-root group id for containers
+TZ            → Timezone
+UMASK         → Default file permissions
+DOCKER_LOG_LEVEL → Docker daemon log level
+
+Example:
+
+SERVER_ROOT=/home/sid/Server
+DOMAIN_NAME=sid.lab
+PUID=1000
+PGID=1000
+TZ=Asia/Kolkata
+UMASK=022
+DOCKER_LOG_LEVEL=info
+
+
+0.3 Usage Rules
+- Compose files MUST reference these variables
+- Hardcoded absolute paths are prohibited
+- Hardcoded UID/GID values are prohibited
+- Containers must inherit TZ where applicable
+
+
+Allowed:
+  ${SERVER_ROOT}/apps/nextcloud/data
+  user: "${PUID}:${PGID}"
+
+Not allowed:
+  /home/sid/Server/apps/nextcloud/data
+  user: "1000:1000"
+
+0.4 Compose Loading Rule (Mandatory)
+- All compose commands must automatically load the global .env
+- Compose files must be executed from inside ${SERVER_ROOT}/apps/{app_name}
+
+Allowed:
+  cd ${SERVER_ROOT}/apps/nextcloud && docker compose up -d
+
+Not allowed:
+  docker compose -f /random/path/compose.yaml up
+
+
+--------------------------------------------------
 1. HOST OPERATING SYSTEM STANDARDS
 --------------------------------------------------
 
@@ -95,9 +164,66 @@ humans and automated systems (AI, scripts, audits).
 - Enable no-new-privileges security option
 
 5.3 Filesystem Restrictions
-- Use read-only root filesystem where possible
+- Root filesystem should be read-only by default
 - Mount only required directories
 - Avoid writable mounts unless necessary
+- Use tmpfs for /tmp and /run where possible
+- Writable mounts must be explicit
+
+5.4 Resource Limits (Mandatory)
+All containers must define resource limits to prevent host exhaustion.
+
+Required:
+- memory limit
+- cpu limit
+
+Example:
+
+deploy:
+  resources:
+    limits:
+      cpus: "2.0"
+      memory: 2g
+
+5.5 Health Checks (Mandatory)
+All services must define a Docker HEALTHCHECK.
+
+Containers without health checks are considered non-production.
+
+Example:
+
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+  interval: 30s
+  timeout: 5s
+  retries: 3
+
+5.6 Restart Policy (Mandatory)
+All services must define a restart policy.
+
+Allowed:
+- unless-stopped
+- on-failure
+
+restart: unless-stopped
+
+5.7 Default Hardening Template (Mandatory)
+
+All services must include the following baseline security options unless explicitly justified:
+
+security_opt:
+  - no-new-privileges:true
+
+cap_drop:
+  - ALL
+
+read_only: true
+
+tmpfs:
+  - /tmp
+
+pids_limit: 100
+
 
 --------------------------------------------------
 6. SECRETS MANAGEMENT
@@ -119,18 +245,110 @@ humans and automated systems (AI, scripts, audits).
 - Do NOT expose secrets via docker inspect
 
 --------------------------------------------------
-7. DATA & VOLUME MANAGEMENT
+7. DATA & VOLUME MANAGEMENT (UPDATED)
 --------------------------------------------------
 
 7.1 Volume Layout
-- Centralized data directory (e.g., /home/{user}/Server)
-- Separate directory per service
+- All persistent data must be stored under:
+  ${SERVER_ROOT}
+- Each application must have an isolated directory:
+  ${SERVER_ROOT}/apps/{app_name}
+- No application may store persistent data outside this structure
 - Separate data, config, and logs where possible
 
+Example:
+  ${SERVER_ROOT}/apps/nextcloud/data
+  ${SERVER_ROOT}/apps/nextcloud/config
+  ${SERVER_ROOT}/apps/nextcloud/logs
+
+
 7.2 Mount Rules
-- Mount only the required subdirectories
-- Avoid broad host mounts
+- Mount only the minimum required subdirectories
+- Avoid broad or top-level host mounts (/, /home, /var, etc.)
 - Avoid sharing volumes between unrelated services
+- Containers must not rely on container-internal storage for persistent data
+- Use read-only mounts wherever write access is not required
+
+
+7.3 Data Locality (Mandatory)
+- All persistent application state MUST reside inside:
+  ${SERVER_ROOT}/apps/{app_name}/data
+- Data must remain portable and self-contained
+- Applications must be migratable by copying their directory only
+
+
+7.4 Named Volumes Only (Strict)
+- All persistent storage MUST use explicitly named Docker volumes
+- Anonymous volumes are prohibited
+- Implicit volumes are prohibited
+- Direct bind mounts are prohibited unless wrapped through a named volume
+- Every mount must map through a named volume
+
+
+7.5 Volume Naming Convention
+Volumes must follow:
+
+  {app_name}_{purpose}
+
+Examples:
+  nextcloud_data
+  immich_library
+  postgres_data
+  actual_data
+
+
+7.6 Volume Mapping Method (MANDATORY)
+Named volumes must bind using the local driver and the SERVER_ROOT variable.
+
+Example:
+
+  volumes:
+    nextcloud_data:
+      driver: local
+      driver_opts:
+        type: none
+        o: bind
+        device: ${SERVER_ROOT}/apps/nextcloud/data
+
+Hardcoded paths are not allowed.
+
+
+7.7 Mandatory Volume Labels
+All volumes MUST include labels.
+
+Required:
+- app
+- type (data | config | logs | cache)
+- backup (true | false)
+- owner
+
+Example:
+
+  volumes:
+    nextcloud_data:
+      labels:
+        app: nextcloud
+        type: data
+        backup: "true"
+        owner: nextcloud
+
+
+7.8 Operational Requirements
+- Volumes marked backup=true must be included in backups
+- Volumes must be independently restorable
+- Ownership must be documented
+- Unused volumes must be pruned regularly
+- Directory structure must remain consistent across all services
+
+
+7.9 Prohibited Practices
+- Anonymous volumes
+- Hardcoded host paths
+- ./relative bind mounts
+- Sharing volumes across unrelated services
+- Volumes without labels
+- Storing persistent data inside containers
+- Data stored outside ${SERVER_ROOT}
 
 --------------------------------------------------
 8. BACKUP & RECOVERY STANDARDS
@@ -172,6 +390,20 @@ humans and automated systems (AI, scripts, audits).
 - Automatic updates must be notify-only
 - Maintain a regular maintenance window
 
+9.3 Image Digest Pinning (Recommended)
+
+For critical infrastructure, images should be pinned using digests instead of tags.
+
+Preferred:
+  nginx@sha256:<digest>
+
+Acceptable:
+  nginx:1.25.3
+
+Not allowed:
+  nginx:latest
+
+
 --------------------------------------------------
 10. MONITORING & OBSERVABILITY
 --------------------------------------------------
@@ -184,6 +416,25 @@ humans and automated systems (AI, scripts, audits).
 10.2 Security Scanning
 - Regular image vulnerability scanning
 - Review container permissions periodically
+
+10.3 Container Logging
+All containers must configure logging limits.
+
+Example:
+
+logging:
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+10.4 Alerting (Recommended)
+- Container crashes must trigger alerts
+- Disk usage above 80% must trigger alerts
+- Backup failures must trigger alerts
+- Healthcheck failures must be monitored
+
+Silent failures are unacceptable in production systems.
 
 --------------------------------------------------
 11. OPERATIONAL DISCIPLINE
