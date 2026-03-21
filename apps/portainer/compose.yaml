@@ -1,0 +1,48 @@
+services:
+  portainer:
+    image: portainer/portainer-ce:2.38.1-alpine
+    container_name: portainer
+    restart: unless-stopped
+    networks:
+      - frontend_net
+      - backend_net
+    ports:
+      - "9000:9000" # Only expose if reverse proxy is not used
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - portainer_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Only if required, otherwise remove for security
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/api/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  portainer_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "${SERVER_ROOT}/apps/portainer/data"
+    labels:
+      app: portainer
+      type: data
+      backup: "true"
+      owner: doc_user
+
+networks:
+  frontend_net:
+    external: true
+  backend_net:
+    external: true

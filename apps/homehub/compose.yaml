@@ -1,0 +1,111 @@
+services:
+  homehub:
+    image: ghcr.io/surajverma/homehub:0.2.3.2
+    container_name: homehub
+    restart: unless-stopped
+
+    user: "${PUID}:${PGID}"
+
+    environment:
+      TZ: ${TZ}
+      FLASK_ENV: production
+      UMASK: ${UMASK}
+  
+    ports:
+      - "5000:5000"
+
+    networks:
+      - backend_net
+      - egress_net
+
+    volumes:
+      - homehub_data:/app/data
+      - homehub_uploads:/app/uploads
+      - homehub_media:/app/media
+      - homehub_pdfs:/app/pdfs
+
+      # Config + secret (direct bind mount — NOT via volume driver)
+      - ${SERVER_ROOT}/apps/homehub/config/config.yml:/app/config.yml:ro
+      - ${SERVER_ROOT}/apps/homehub/secrets/secret_key.txt:/run/secrets/secret_key:ro
+
+    security_opt:
+      - no-new-privileges:true
+
+    cap_drop:
+      - ALL
+
+    read_only: true
+
+    tmpfs:
+      - /tmp
+
+    mem_limit: 512m
+    cpus: 1.0
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  homehub_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${SERVER_ROOT}/apps/homehub/data/data
+    labels:
+      app: homehub
+      type: data
+      backup: "true"
+      owner: homehub
+
+  homehub_uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${SERVER_ROOT}/apps/homehub/data/uploads
+    labels:
+      app: homehub
+      type: data
+      backup: "true"
+      owner: homehub
+
+  homehub_media:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${SERVER_ROOT}/apps/homehub/data/media
+    labels:
+      app: homehub
+      type: data
+      backup: "true"
+      owner: homehub
+
+  homehub_pdfs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${SERVER_ROOT}/apps/homehub/data/pdfs
+    labels:
+      app: homehub
+      type: data
+      backup: "true"
+      owner: homehub
+
+networks:
+  backend_net:
+    external: true
+  egress_net:
+    external: true

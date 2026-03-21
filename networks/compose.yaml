@@ -1,0 +1,53 @@
+services:
+  network:
+    image: alpine
+    container_name: network
+    command: sleep 3600
+    networks:
+      - frontend_net
+      - backend_net
+      - monitoring_net
+      - egress_net
+
+networks:
+  # Docker network definitions for homelab services
+  # Each network is designed for a specific purpose and access control.
+  # Frontend network: Used for services exposed to users or the internet.
+  frontend_net:
+    name: frontend_net
+    driver: bridge
+    attachable: false
+    labels:
+      tier: frontend
+      exposure: public
+
+  # Backend network: Used for internal communication between backend services.
+  backend_net:
+    name: backend_net
+    driver: bridge
+    internal: true
+    attachable: false
+    labels:
+      tier: backend
+      exposure: internal
+
+  # Monitoring network: Used for monitoring and observability tools.
+  monitoring_net:
+    name: monitoring_net
+    driver: bridge
+    internal: true
+    attachable: false
+    labels:
+      tier: monitoring
+      exposure: internal
+
+  # Egress network: Used for containers that need outbound API access only.
+  # No inbound connections should be routed here.
+  egress_net:
+    name: egress_net
+    driver: bridge
+    attachable: false
+    labels:
+      tier: egress
+      exposure: egress
+      purpose: outbound-apis

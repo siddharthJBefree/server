@@ -1,0 +1,89 @@
+# Nginx Proxy Manager (reverse proxy) service definition.
+# Exposure notes:
+# - 80/tcp  : HTTP entrypoint (redirects to HTTPS inside the app)
+# - 443/tcp : HTTPS entrypoint for all proxied services
+# - 81/tcp  : Admin UI (lock down with network rules and strong creds)
+services:
+  proxy:
+    image: "jc21/nginx-proxy-manager:2.14.0"
+    container_name: proxy
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=${TZ}
+      - PUID=${PUID}
+      - PGID=${PGID}
+    ports:
+      # Public entrypoints. Restrict at firewall/router if needed.
+      - "80:80"
+      - "81:81"
+      - "443:443"
+    volumes:
+      # App data and Let's Encrypt storage (persisted via named volumes).
+      - proxy_data:/data
+      - proxy_letsencrypt:/etc/letsencrypt
+    networks:
+      - frontend_net
+      - backend_net
+    healthcheck:
+      test: ["CMD", "/bin/check-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - FOWNER
+      - DAC_OVERRIDE
+    tmpfs:
+      - /tmp
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Named volumes backed by bind mounts under SERVER_ROOT.
+# Exposure notes:
+# - These paths are not exposed to the network, but contain sensitive data
+#   (certificates and configuration). Protect filesystem permissions.
+volumes:
+  proxy_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${SERVER_ROOT}/apps/proxy/data
+    labels:
+      app: proxy
+      type: data
+      backup: "true"
+      owner: proxy
+  proxy_letsencrypt:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${SERVER_ROOT}/apps/proxy/logs
+    labels:
+      app: proxy
+      type: logs
+      backup: "false"
+      owner: proxy
+
+# External network created at the Server level.
+# Exposure notes:
+# - Only the reverse proxy should publish host ports.
+# - Other apps should join frontend_net but use expose (not ports).
+networks:
+  frontend_net:
+    external: true
+  backend_net:
+    external: true
